@@ -4,7 +4,8 @@ window.App.saveImage =
   var cooldown = (new Date).getTime() + 1000,
       pause = 0,
       stop = 0,
-      pendingPixel = {x: 0, y: 0};
+      pendingPixel = {x: 0, y: 0},
+      type = 0;
      
   if (typeof images != "object") {
     window.App.elements.board[0].toBlob(function(a) {
@@ -29,12 +30,22 @@ window.App.saveImage =
   
   function doPlace(a, b, c) {                           //Mister p0358 was right. Damn arms race.
     pendingPixel.x = a; pendingPixel.y = b;
-    window.App.socket.send(JSON.stringify({
+    
+    var buff = new DataView(new ArrayBuffer(10)), sData;
+    
+    buff.setUint8(0, 10),
+    buff.setInt32(1, a, !0),
+    buff.setInt32(5, b, !0),
+    buff.setUint8(9, c);
+    
+    sData = (type == 0 ? JSON.stringify({
       type: "placepixel",
       x: a,
       y: b,
       color: c
-    }));
+    }) : buff);
+    
+    window.App.socket.send(sData);
   }
   
   function shuffle(array) {
@@ -82,7 +93,20 @@ window.App.saveImage =
       coold = cooldown;
 
   App.socket.onmessage = function(message){
-    var m = JSON.parse(message.data);
+    var m = {type: "blah"};
+    
+    if (typeof message.data == "string" || message.data instanceof String) m = JSON.parse(message.data)
+      else {
+        var unzip = new DataView(message.data),
+            count = 0;
+        
+        type = 1;
+        
+        if (unzip.getUint8(count++) == 15) {
+            m.type = "cooldown";
+            m.wait = unzip.getFloat32(count, !0);
+        }
+      }
 
     if (m.type == "captcha_required") {
       if (Notification.permission !== "granted")
